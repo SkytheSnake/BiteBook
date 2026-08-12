@@ -24,6 +24,8 @@ const defaultState = {
     'bravas':{rating:4,note:'Perfect for sharing and pretending I will not order another plate. Good atmosphere and very easy to over-order.',photo:false,checkin:true}
   },
   redeemed:[],
+  googleSaved:[],
+  googleVisited:{},
   betaBonusClaimed:true
 };
 
@@ -33,6 +35,12 @@ let cuisine = 'All';
 let query = '';
 let mapMode = 'all';
 let mapInstance = null;
+let mapMarkers = [];
+let mapInfoWindow = null;
+let livePlaces = [];
+let googleMapsPromise = null;
+let googleSearchCache = new Map();
+let searchTimer = null;
 
 function clone(obj){return JSON.parse(JSON.stringify(obj))}
 function load(){
@@ -67,7 +75,7 @@ function reviewScore(v){
   return {xp,bites,quality,parts};
 }
 function totals(){
-  const scores=Object.values(state.visited).map(reviewScore);
+  const scores=[...Object.values(state.visited), ...Object.values(state.googleVisited||{})].map(reviewScore);
   const baseXp=scores.reduce((n,s)=>n+s.xp,0);
   const baseBites=scores.reduce((n,s)=>n+s.bites,0);
   const quality=scores.filter(s=>s.quality).length;
@@ -86,7 +94,11 @@ function setPage(next){
   render(); window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>setPage(b.dataset.page)));
-document.getElementById('searchInput').addEventListener('input',e=>{query=e.target.value.toLowerCase(); if(page!=='discover') setPage('discover'); else render();});
+document.getElementById('searchInput').addEventListener('input',e=>{
+  query=e.target.value.toLowerCase().trim();
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{ if(page!=='discover') setPage('discover'); else render(); },550);
+});
 
 function toast(message){
   const root=document.getElementById('toastRoot');
@@ -124,7 +136,7 @@ function render(){
   if(page==='groups')root.innerHTML=groups();
   if(page==='rewards')root.innerHTML=rewardsPage();
   if(page==='owners')root.innerHTML=owners();
-  if(page==='discover') requestAnimationFrame(initBristolMap);
+  if(page==='discover') requestAnimationFrame(initGoogleMap);
   else destroyMap();
 }
 
@@ -133,11 +145,12 @@ function discover(){
   const list=restaurants.filter(r=>`${r.name} ${r.area} ${r.cuisine} ${r.tags.join(' ')}`.toLowerCase().includes(query)&&(cuisine==='All'||r.cuisine===cuisine));
   const t=totals(); const visited=Object.keys(state.visited).length;
   return `<div class="page">
-    <section class="hero"><div><span class="eyebrow">✦ Bristol beta · V2</span><h1>Eat Bristol.<br>Make a game of it.</h1><p>Discover somewhere new, check in, rate it properly and earn your way up the leaderboard. XP is for bragging rights. Bites are for free food. Sensible priorities.</p><div class="actions"><button class="primary" onclick="document.getElementById('explore').scrollIntoView({behavior:'smooth'})">Find my next bite</button><button class="secondary" onclick="setPage('rewards')">Spend ${t.bites} Bites</button></div></div>
+    <section class="hero"><div><span class="eyebrow">✦ Bristol beta · Google Maps build</span><h1>Eat Bristol.<br>Make a game of it.</h1><p>Discover somewhere new, check in, rate it properly and earn your way up the leaderboard. XP is for bragging rights. Bites are for free food. Sensible priorities.</p><div class="actions"><button class="primary" onclick="document.getElementById('explore').scrollIntoView({behavior:'smooth'})">Find my next bite</button><button class="secondary" onclick="setPage('rewards')">Spend ${t.bites} Bites</button></div></div>
     <div class="hero-wallet"><span>Level ${level()}</span><strong>${format(t.xp)} <em>XP</em></strong><small>${500-(t.xp%500||0)} XP to the next level</small><div class="progress"><i style="width:${nextLevelProgress()}%"></i></div><hr><span>Available to spend</span><strong class="bites-total">${format(t.bites)} <em>Bites</em></strong><small>Bites never affect your leaderboard score.</small></div></section>
     ${earnStrip()}
     <section class="stats"><div class="stat"><span>Places tried</span><b>${visited}</b><small>Keep eating. Heroically.</small></div><div class="stat"><span>Quality reviews</span><b>${t.quality}</b><small>${Math.max(0,10-(t.quality%10||10))||10} until the next 250 Bite bonus</small></div><div class="stat"><span>Group position</span><b>#2</b><small>Nick remains a problem</small></div><div class="stat"><span>Bites available</span><b>${t.bites}</b><small>Spend them in Rewards</small></div></section>
-    <section class="map-section"><div class="section-head"><div><span class="eyebrow">Bristol Bite Map</span><h2>Collect the city</h2><p class="section-copy">See where you have eaten, what is waiting on your wishlist and which restaurants currently have Bite rewards.</p></div><div class="map-filters">${[['all','All'],['unvisited','Not tried'],['visited','Visited'],['wishlist','Wishlist'],['rewards','Rewards']].map(x=>`<button onclick="setMapMode('${x[0]}')" class="${mapMode===x[0]?'active':''}">${x[1]}</button>`).join('')}</div></div><div class="map-shell"><div id="bristolMap"></div><div class="map-legend"><span><i class="dot unvisited"></i>Not tried</span><span><i class="dot visited"></i>Visited</span><span><i class="dot wishlist"></i>Wishlist</span><span><i class="dot reward"></i>Reward available</span></div></div></section>
+    <section class="map-section"><div class="section-head"><div><span class="eyebrow">Live Bristol Bite Map</span><h2>Collect the city</h2><p class="section-copy">Restaurant pins now come from Google Places. Search above for a restaurant, cuisine or area and BiteBook layers your visits, wishlist and rewards over the live map.</p></div><div class="map-filters">${[['all','All'],['unvisited','Not tried'],['visited','Visited'],['wishlist','Wishlist'],['rewards','Rewards']].map(x=>`<button onclick="setMapMode('${x[0]}')" class="${mapMode===x[0]?'active':''}">${x[1]}</button>`).join('')}</div></div><div class="map-shell"><div id="bristolMap"><div class="map-loading">Connecting to Google Maps…</div></div><div id="mapStatus" class="map-status">Live Google restaurant data</div><div class="map-legend"><span><i class="dot unvisited"></i>Not tried</span><span><i class="dot visited"></i>Visited</span><span><i class="dot wishlist"></i>Wishlist</span><span><i class="dot reward"></i>Reward available</span></div></div><div class="google-note">Restaurant information is supplied live by Google Places. BiteBook stores your own game progress against Google Place IDs rather than trying to maintain a second copy of Bristol.</div></section>
+    <section id="googleExplore"><div class="section-head"><div><span class="eyebrow">Live from Google</span><h2 id="googleExploreTitle">Restaurants on the map</h2></div><small class="google-attrib">Google Places</small></div><div id="googleRestaurantGrid" class="restaurant-grid"><div class="empty">Loading Bristol restaurants…</div></div></section>
     <section id="explore"><div class="section-head"><div><span class="eyebrow">Explore</span><h2>Popular around Bristol</h2></div><div class="filters">${cs.map(c=>`<button onclick="setCuisine('${c.replaceAll("'","\\'")}')" class="${cuisine===c?'active':''}">${c}</button>`).join('')}</div></div><div class="restaurant-grid">${list.map(card).join('')}</div>${!list.length?'<div class="empty">No bites found. Bristol has failed you. Try another search.</div>':''}</section>
   </div>`;
 }
@@ -145,42 +158,161 @@ function setCuisine(c){cuisine=c;render()}
 function setMapMode(mode){mapMode=mode;render()}
 
 function destroyMap(){
-  if(mapInstance){mapInstance.remove();mapInstance=null;}
+  mapMarkers.forEach(marker=>{ try{marker.map=null;}catch(e){} });
+  mapMarkers=[];
+  if(mapInfoWindow){try{mapInfoWindow.close();}catch(e){}}
+  mapInfoWindow=null;
+  mapInstance=null;
 }
-function mapRestaurantStatus(r){
-  if(state.visited[r.id]) return 'visited';
-  if(state.saved.includes(r.id)) return 'wishlist';
+
+function googleKey(){return (window.BITEBOOK_CONFIG&&window.BITEBOOK_CONFIG.googleMapsApiKey||'').trim()}
+function hasGoogleKey(){const key=googleKey();return key && !key.includes('PASTE_YOUR_')}
+
+function loadGoogleMaps(){
+  if(window.google?.maps?.importLibrary) return Promise.resolve(window.google.maps);
+  if(googleMapsPromise) return googleMapsPromise;
+  if(!hasGoogleKey()) return Promise.reject(new Error('MISSING_KEY'));
+  googleMapsPromise=new Promise((resolve,reject)=>{
+    const callback='__biteBookGoogleMapsReady';
+    window[callback]=()=>{delete window[callback];resolve(window.google.maps)};
+    const script=document.createElement('script');
+    script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleKey())}&loading=async&v=weekly&callback=${callback}`;
+    script.async=true; script.defer=true;
+    script.onerror=()=>reject(new Error('Google Maps failed to load'));
+    document.head.appendChild(script);
+  });
+  return googleMapsPromise;
+}
+
+function normaliseName(name){return String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function curatedMatch(place){return restaurants.find(r=>normaliseName(r.name)===normaliseName(place.displayName))||null}
+function googleStatus(place){
+  const local=curatedMatch(place);
+  if((state.googleVisited||{})[place.id] || (local&&state.visited[local.id])) return 'visited';
+  if((state.googleSaved||[]).includes(place.id) || (local&&state.saved.includes(local.id))) return 'wishlist';
   return 'unvisited';
 }
-function mapVisible(r){
-  const matchesSearch=`${r.name} ${r.area} ${r.cuisine} ${r.tags.join(' ')}`.toLowerCase().includes(query);
-  const matchesCuisine=cuisine==='All'||r.cuisine===cuisine;
-  if(!matchesSearch||!matchesCuisine)return false;
-  if(mapMode==='visited')return Boolean(state.visited[r.id]);
-  if(mapMode==='unvisited')return !state.visited[r.id];
-  if(mapMode==='wishlist')return state.saved.includes(r.id)&&!state.visited[r.id];
-  if(mapMode==='rewards')return rewards.some(x=>x.restaurant===r.id);
+function googleHasReward(place){const local=curatedMatch(place);return Boolean(local&&rewards.some(x=>x.restaurant===local.id))}
+function googleVisible(place){
+  const status=googleStatus(place); const reward=googleHasReward(place);
+  if(mapMode==='visited')return status==='visited';
+  if(mapMode==='unvisited')return status==='unvisited';
+  if(mapMode==='wishlist')return status==='wishlist';
+  if(mapMode==='rewards')return reward;
   return true;
 }
-function initBristolMap(){
-  const el=document.getElementById('bristolMap');
-  if(!el||typeof L==='undefined')return;
-  destroyMap();
-  mapInstance=L.map(el,{zoomControl:true,scrollWheelZoom:false}).setView([51.4555,-2.5970],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(mapInstance);
-  const visible=restaurants.filter(mapVisible);
-  const bounds=[];
-  visible.forEach(r=>{
-    const status=mapRestaurantStatus(r);
-    const hasReward=rewards.some(x=>x.restaurant===r.id);
-    const marker=L.marker([r.lat,r.lng],{icon:L.divIcon({className:'bite-map-icon-wrap',html:`<div class=\"bite-map-icon ${status} ${hasReward?'has-reward':''}\"><span>${state.visited[r.id]?'✓':state.saved.includes(r.id)?'♥':'B'}</span>${hasReward?'<b>✦</b>':''}</div>`,iconSize:[38,44],iconAnchor:[19,42],popupAnchor:[0,-38]})}).addTo(mapInstance);
-    marker.bindPopup(`<div class=\"map-popup\"><strong>${r.name}</strong><span>${r.area} · ${r.cuisine} · ${r.price}</span><small>★ ${r.score}${state.visited[r.id]?' · ✓ Visited':state.saved.includes(r.id)?' · ♥ Wishlist':''}${hasReward?' · ✦ Reward':''}</small><button onclick=\"openRestaurant('${r.id}')\">Open BiteBook profile</button></div>`,{closeButton:false});
-    bounds.push([r.lat,r.lng]);
-  });
-  if(bounds.length>1)mapInstance.fitBounds(bounds,{padding:[38,38],maxZoom:14});
-  if(bounds.length===1)mapInstance.setView(bounds[0],15);
-  setTimeout(()=>mapInstance&&mapInstance.invalidateSize(),80);
+function placeOpenLabel(place){
+  if(place.businessStatus && place.businessStatus!=='OPERATIONAL') return 'Closed';
+  return 'Listed on Google';
 }
+function mapErrorMessage(error){
+  const el=document.getElementById('bristolMap');
+  if(!el)return;
+  const missing=error&&error.message==='MISSING_KEY';
+  el.innerHTML=`<div class="map-setup"><b>${missing?'One tiny setup step left':'Google Maps could not load'}</b><p>${missing?'Open <code>config.js</code>, paste your restricted API key between the quotes, save it and upload that file to GitHub.':'Check the browser console and your Google Cloud key/referrer restrictions.'}</p></div>`;
+  const status=document.getElementById('mapStatus');if(status)status.textContent=missing?'API key not added yet':'Map connection error';
+}
+
+async function initGoogleMap(){
+  const el=document.getElementById('bristolMap'); if(!el)return;
+  destroyMap();
+  try{
+    await loadGoogleMaps();
+    const [{Map,InfoWindow},{AdvancedMarkerElement},{Place,SearchNearbyRankPreference}] = await Promise.all([
+      google.maps.importLibrary('maps'),
+      google.maps.importLibrary('marker'),
+      google.maps.importLibrary('places')
+    ]);
+    if(!document.getElementById('bristolMap'))return;
+    const bristol={lat:51.4545,lng:-2.5879};
+    mapInstance=new Map(document.getElementById('bristolMap'),{center:bristol,zoom:12,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,mapId:'DEMO_MAP_ID'});
+    mapInfoWindow=new InfoWindow();
+    const cacheKey=`${query||'__nearby__'}|${cuisine}`;
+    let places=googleSearchCache.get(cacheKey);
+    if(!places){
+      const fields=['id','displayName','location','formattedAddress','rating','userRatingCount','businessStatus','googleMapsURI','primaryTypeDisplayName'];
+      if(query || cuisine!=='All'){
+        const text=query || cuisine;
+        const result=await Place.searchByText({textQuery:`${text} restaurants in Bristol`,fields,includedType:'restaurant',useStrictTypeFiltering:false,locationBias:bristol,language:'en-GB',region:'gb',maxResultCount:20});
+        places=result.places||[];
+      }else{
+        const result=await Place.searchNearby({fields,locationRestriction:{center:bristol,radius:7000},includedPrimaryTypes:['restaurant'],maxResultCount:20,rankPreference:SearchNearbyRankPreference.POPULARITY});
+        places=result.places||[];
+      }
+      googleSearchCache.set(cacheKey,places);
+    }
+    livePlaces=places;
+    renderGooglePlacesList(places);
+    const visible=places.filter(googleVisible);
+    const bounds=new google.maps.LatLngBounds();
+    visible.forEach(place=>{
+      if(!place.location)return;
+      const status=googleStatus(place), reward=googleHasReward(place);
+      const pin=document.createElement('div');
+      pin.className=`google-bite-marker ${status}${reward?' has-reward':''}`;
+      pin.innerHTML=`<span>${status==='visited'?'✓':status==='wishlist'?'♥':'B'}</span>${reward?'<b>✦</b>':''}`;
+      const marker=new AdvancedMarkerElement({map:mapInstance,position:place.location,title:place.displayName,content:pin});
+      marker.addListener('gmp-click',()=>showGoogleInfo(place,marker));
+      mapMarkers.push(marker); bounds.extend(place.location);
+    });
+    if(visible.length>1)mapInstance.fitBounds(bounds,70);
+    else if(visible.length===1){mapInstance.setCenter(visible[0].location);mapInstance.setZoom(16)}
+    const status=document.getElementById('mapStatus');
+    if(status)status.textContent=`${visible.length} live restaurant${visible.length===1?'':'s'} shown · Google Places`;
+  }catch(error){console.error(error);mapErrorMessage(error)}
+}
+
+function showGoogleInfo(place,marker){
+  if(!mapInfoWindow)return;
+  const status=googleStatus(place), reward=googleHasReward(place);
+  const rating=place.rating?`★ ${place.rating}${place.userRatingCount?` (${format(place.userRatingCount)})`:''}`:'No Google rating';
+  mapInfoWindow.setHeaderContent(place.displayName||'Restaurant');
+  mapInfoWindow.setContent(`<div class="map-popup"><span>${escapeHtml(place.formattedAddress||'Bristol')}</span><small>${rating} · ${status==='visited'?'✓ Visited':status==='wishlist'?'♥ Wishlist':'Not tried'}${reward?' · ✦ Bite reward':''}</small><div class="map-popup-actions"><button onclick="openGoogleRestaurant('${place.id}')">Open in BiteBook</button><button class="light" onclick="googleDirections('${place.id}')">Directions</button></div></div>`);
+  mapInfoWindow.open({anchor:marker,map:mapInstance});
+}
+
+function renderGooglePlacesList(places){
+  const grid=document.getElementById('googleRestaurantGrid'); if(!grid)return;
+  const shown=places.filter(googleVisible);
+  const title=document.getElementById('googleExploreTitle'); if(title)title.textContent=query?`Results for “${query}”`:'Restaurants on the map';
+  if(!shown.length){grid.innerHTML='<div class="empty">No restaurants match this Bite Map filter. Try All or another search.</div>';return}
+  grid.innerHTML=shown.slice(0,12).map(googleCard).join('');
+}
+function googleCard(place){
+  const status=googleStatus(place), saved=status==='wishlist';
+  const rating=place.rating?`★ ${place.rating}`:'New / unrated';
+  const type=place.primaryTypeDisplayName||'Restaurant';
+  return `<article class="restaurant google-card"><div class="google-card-top" onclick="openGoogleRestaurant('${place.id}')"><span class="google-g">G</span><span class="chip ${status==='visited'?'visited-chip':status==='wishlist'?'wishlist-chip':'price'}">${status==='visited'?'✓ Visited':status==='wishlist'?'♥ Wishlist':'Not tried'}</span>${googleHasReward(place)?'<span class="chip deal">✦ Reward</span>':''}</div><div class="restaurant-body"><div class="restaurant-title"><div><h3>${escapeHtml(place.displayName||'Restaurant')}</h3><div class="meta">⌖ ${escapeHtml(place.formattedAddress||'Bristol')}</div></div><button class="save ${saved?'saved':''}" onclick="event.stopPropagation();toggleGoogleSave('${place.id}')">${saved?'♥':'♡'}</button></div><p class="blurb">${escapeHtml(type)} · ${placeOpenLabel(place)}</p><div class="card-foot"><span class="score">${rating}</span><button class="view" onclick="openGoogleRestaurant('${place.id}')">View</button></div></div></article>`;
+}
+function toggleGoogleSave(placeId){
+  state.googleSaved=state.googleSaved||[];
+  state.googleSaved=state.googleSaved.includes(placeId)?state.googleSaved.filter(x=>x!==placeId):[...state.googleSaved,placeId];
+  save();render();toast(state.googleSaved.includes(placeId)?'♥ Added to your BiteBook wishlist':'Removed from wishlist');
+}
+function ensureGoogleVisit(id){state.googleVisited=state.googleVisited||{};if(!state.googleVisited[id])state.googleVisited[id]={rating:0,note:'',photo:false,checkin:false};return state.googleVisited[id]}
+function findLivePlace(id){return livePlaces.find(p=>p.id===id)||[...googleSearchCache.values()].flat().find(p=>p.id===id)}
+function googleDirections(placeId){
+  const place=findLivePlace(placeId);if(!place)return;
+  const url=`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.displayName||'')}&destination_place_id=${encodeURIComponent(place.id)}`;
+  window.open(url,'_blank','noopener');
+}
+function openGoogleRestaurant(placeId){
+  const place=findLivePlace(placeId);if(!place)return;
+  const v=(state.googleVisited||{})[placeId]||{rating:0,note:'',photo:false,checkin:false};const earned=reviewScore(v);const saved=(state.googleSaved||[]).includes(placeId);
+  const googleRating=place.rating?`★ ${place.rating} on Google${place.userRatingCount?` · ${format(place.userRatingCount)} ratings`:''}`:'No Google rating yet';
+  document.getElementById('modalRoot').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><section class="modal google-modal"><button class="close" onclick="closeModal()">✕</button><div class="google-place-hero"><span class="google-g">G</span><div><span class="eyebrow">Live Google Place</span><h2>${escapeHtml(place.displayName||'Restaurant')}</h2><p>${escapeHtml(place.formattedAddress||'Bristol')}</p><small>${googleRating} · ${placeOpenLabel(place)}</small></div></div><div class="modal-content"><div class="google-actions"><button class="secondary" onclick="toggleGoogleSave('${placeId}');openGoogleRestaurant('${placeId}')">${saved?'♥ On wishlist':'♡ Add to wishlist'}</button><button class="primary" onclick="googleDirections('${placeId}')">⌖ Get directions</button></div>
+    <div class="review-builder"><div class="review-head"><div><b>Build your Bite</b><small>Your BiteBook rating is yours. It does not change the Google rating.</small></div><div class="mini-earned"><b>${earned.xp} XP</b><span>${earned.bites} Bites</span></div></div>
+      <button class="task-toggle ${v.checkin?'done':''}" onclick="toggleGoogleCheckin('${placeId}')"><span>⌖</span><div><b>${v.checkin?'Checked in':'Check in'}</b><small>+50 XP · +15 Bites</small></div><strong>${v.checkin?'✓':'+'}</strong></button>
+      <div class="rating-row"><div><b>Your BiteBook rating</b><small>Any honest rating earns the same reward.</small></div><div class="stars">${[1,2,3,4,5].map(n=>`<button class="${n<=v.rating?'on':''}" onclick="rateGoogle('${placeId}',${n})">★</button>`).join('')}</div></div>
+      <label class="review-text"><span><b>Your review</b><small id="reviewHint">${(v.note||'').length>=80?'Quality threshold reached ✓':'80+ characters unlocks the quality bonus'}</small></span><textarea id="reviewNote" maxlength="500" placeholder="What did you eat? What stood out? Who would you recommend it to?">${escapeHtml(v.note||'')}</textarea><div><small id="charCount">${(v.note||'').length}/80 for full reward</small><button onclick="saveGoogleReview('${placeId}')">Save review</button></div></label>
+      <button class="task-toggle ${v.photo?'done':''}" onclick="toggleGooglePhoto('${placeId}')"><span>▧</span><div><b>${v.photo?'Photo added':'Add a food photo'}</b><small>Prototype toggle · +40 XP · +20 Bites</small></div><strong>${v.photo?'✓':'+'}</strong></button>
+    </div><div class="google-source"><b>Restaurant data:</b> Google Places · <button onclick="googleDirections('${placeId}')">Open directions in Google Maps</button></div></div></section></div>`;
+  const ta=document.getElementById('reviewNote');if(ta)ta.addEventListener('input',()=>{document.getElementById('charCount').textContent=`${ta.value.length}/80 for full reward`;document.getElementById('reviewHint').textContent=ta.value.length>=80?'Quality threshold reached ✓':'80+ characters unlocks the quality bonus';});
+}
+function rateGoogle(id,rating){const before=reviewScore((state.googleVisited||{})[id]);ensureGoogleVisit(id).rating=rating;save();const after=reviewScore(state.googleVisited[id]);openGoogleRestaurant(id);renderHeader();if(after.xp>before.xp)toast(`★ +${after.xp-before.xp} XP · +${after.bites-before.bites} Bites`)}
+function toggleGoogleCheckin(id){const v=ensureGoogleVisit(id);const before=reviewScore(v);v.checkin=!v.checkin;save();const after=reviewScore(v);openGoogleRestaurant(id);renderHeader();if(v.checkin)toast(`⌖ +${after.xp-before.xp} XP · +${after.bites-before.bites} Bites`)}
+function toggleGooglePhoto(id){const v=ensureGoogleVisit(id);const before=reviewScore(v);v.photo=!v.photo;save();const after=reviewScore(v);openGoogleRestaurant(id);renderHeader();if(v.photo)toast(`▧ +${after.xp-before.xp} XP · +${after.bites-before.bites} Bites`)}
+function saveGoogleReview(id){const v=ensureGoogleVisit(id);const before=reviewScore(v);v.note=document.getElementById('reviewNote').value.trim();save();const after=reviewScore(v);openGoogleRestaurant(id);renderHeader();const dx=after.xp-before.xp,db=after.bites-before.bites;toast(dx>0?`✎ +${dx} XP · +${db} Bites`:'Review saved')}
 
 
 function bitebook(){

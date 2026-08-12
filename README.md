@@ -1,40 +1,39 @@
-# BiteBook V2.1 — GitHub Pages prototype
+# BiteBook V0.4 — Google Maps build
 
-BiteBook turns eating out into a city-wide collecting game. This V2.1 prototype separates permanent **XP** from spendable **Bites** and adds a working local rewards loop.
+This prototype moves BiteBook's Bristol map from Leaflet/OpenStreetMap to Google Maps + Google Places.
 
-## What V2.1 adds
+## What's new
 
-- Permanent XP for levels and leaderboards
-- Spendable Bites wallet
-- Check-ins, ratings, written reviews and food-photo actions with different rewards
-- Quality-review threshold: useful reviews earn more, regardless of star rating
-- Restaurant reward marketplace with simulated redemption codes
-- Bite spending that does not reduce XP
-- Auto-calculated challenge and badge progress
-- Updated restaurant partner proposition focused on anonymous, rating-independent rewards
-- Automatic migration of old BiteBook V1 browser data where possible
+- Google Maps replaces the old tiled map.
+- Nearby Bristol restaurants are pulled live from Google Places.
+- Search for restaurants, cuisines and areas using the main BiteBook search box.
+- Google ratings, addresses and business status are shown separately from BiteBook's own ratings.
+- Users can add live Google Places to their BiteBook wishlist.
+- Check-ins, BiteBook ratings, useful reviews and photo toggles work against Google Place IDs and still earn XP/Bites.
+- Directions open the selected Google Place in Google Maps, where the user's current location can be used for navigation.
+- Existing demo BiteBook rewards/visited/wishlist states are overlaid where a live Google Place name matches the demo restaurant.
 
-## Run locally
+## Add your Google API key
 
-Double-click `index.html`.
+Open `config.js` and replace:
 
-## Put it on GitHub Pages
+```js
+googleMapsApiKey: 'PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE'
+```
 
-Upload/replace these files in the root of your existing repository:
+with your restricted browser API key.
 
-- `index.html`
-- `styles.css`
-- `app.js`
-- `supabase-schema.sql`
-- `README.md`
+Do not remove the quotes.
 
-Commit the changes. If GitHub Pages is already configured to deploy from `main` / `(root)`, the live site should update automatically after the Pages build completes.
+Your key should be restricted in Google Cloud to your BiteBook GitHub Pages URL (HTTP referrer restriction) and only the APIs you intend BiteBook to use.
 
-## Prototype limitations
+## Publish on GitHub Pages
 
-V2.1 still stores state in `localStorage`, so users are not genuinely shared across devices yet. Photo upload is represented by a toggle and reward redemption codes are generated locally. The next backend phase should connect Supabase Auth and persist profiles, visits/reviews, groups, wallets, transactions, rewards and redemptions on the server.
+Replace the files in your existing BiteBook repository with this version, including the new `config.js`, then commit the changes. GitHub Pages should redeploy automatically.
 
+## Important prototype notes
 
-## V2.1 map update
-
-Discover now includes an interactive Bristol map powered by Leaflet + OpenStreetMap. Pins distinguish visited, wishlist and unvisited restaurants, reward partners carry a reward badge, and the map responds to search, cuisine and map-status filters.
+- Google Places search results are intentionally cached in the browser session so changing BiteBook filters does not make another paid Places request unnecessarily.
+- Text search is debounced to avoid triggering an API request for every keystroke.
+- V0.4 stores only BiteBook user activity in localStorage. Supabase is still the planned next step for real accounts, shared groups, server-side reward redemptions and cross-device progress.
+- The demo restaurant catalogue remains in the code for BiteBook rewards and sample content, but live discovery now comes from Google Places.
