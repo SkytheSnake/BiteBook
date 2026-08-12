@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#211a17" />
+  <meta name="description" content="BiteBook — discover, rate and compete your way around your city's best food." />
+  <title>BiteBook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">B</div><div><div class="brand-name">BiteBook</div><small>eat · rate · compete</small></div></div>
+    <nav id="sideNav">
+      <button data-page="discover" class="active">⌖ <span>Discover</span></button>
+      <button data-page="bitebook">🍴 <span>My BiteBook</span></button>
+      <button data-page="groups">♟ <span>Groups</span></button>
+      <button data-page="deals">✦ <span>Deals</span></button>
+      <button data-page="owners">▣ <span>For Restaurants</span></button>
+    </nav>
+    <div class="user-card"><div class="avatar">A</div><div><b>Annie</b><small>Food menace · Level 4</small></div><span>⚙</span></div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div class="mobile-brand brand-mark">B</div>
+      <label class="search"><span>⌕</span><input id="searchInput" placeholder="Search Bristol restaurants, areas or cuisines…" /></label>
+      <div class="score-pill"><div class="avatar mini">A</div><b id="topPoints">0 pts</b><span>🔥</span></div>
+    </header>
+    <div id="app"></div>
+  </main>
+
+  <nav class="mobile-nav" id="mobileNav">
+    <button data-page="discover" class="active">⌖<span>Discover</span></button>
+    <button data-page="bitebook">🍴<span>BiteBook</span></button>
+    <button data-page="groups">♟<span>Groups</span></button>
+    <button data-page="deals">✦<span>Deals</span></button>
+  </nav>
+
+  <div id="modalRoot"></div>
+  <script src="app.js"></script>
+</body>
+</html>
