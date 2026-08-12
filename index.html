@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3yndXXDdbF4AClw4hMZ3iN0Q9oP1A=" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -18,17 +19,17 @@
       <button data-page="discover" class="active">⌖ <span>Discover</span></button>
       <button data-page="bitebook">🍴 <span>My BiteBook</span></button>
       <button data-page="groups">♟ <span>Groups</span></button>
-      <button data-page="deals">✦ <span>Deals</span></button>
+      <button data-page="rewards">✦ <span>Rewards</span></button>
       <button data-page="owners">▣ <span>For Restaurants</span></button>
     </nav>
-    <div class="user-card"><div class="avatar">A</div><div><b>Annie</b><small>Food menace · Level 4</small></div><span>⚙</span></div>
+    <div class="user-card"><div class="avatar">A</div><div><b>Annie</b><small id="sidebarLevel">Food menace · Level 1</small></div><span>⚙</span></div>
   </aside>
 
   <main>
     <header class="topbar">
       <div class="mobile-brand brand-mark">B</div>
       <label class="search"><span>⌕</span><input id="searchInput" placeholder="Search Bristol restaurants, areas or cuisines…" /></label>
-      <div class="score-pill"><div class="avatar mini">A</div><b id="topPoints">0 pts</b><span>🔥</span></div>
+      <div class="wallet"><span class="wallet-xp"><b id="topXp">0 XP</b><small>rank</small></span><span class="wallet-bites"><b id="topBites">0 Bites</b><small>spend</small></span></div>
     </header>
     <div id="app"></div>
   </main>
@@ -37,10 +38,12 @@
     <button data-page="discover" class="active">⌖<span>Discover</span></button>
     <button data-page="bitebook">🍴<span>BiteBook</span></button>
     <button data-page="groups">♟<span>Groups</span></button>
-    <button data-page="deals">✦<span>Deals</span></button>
+    <button data-page="rewards">✦<span>Rewards</span></button>
   </nav>
 
+  <div id="toastRoot"></div>
   <div id="modalRoot"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="app.js"></script>
 </body>
 </html>

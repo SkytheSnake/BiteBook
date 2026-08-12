@@ -1,48 +1,40 @@
-# BiteBook — GitHub MVP v0.1
+# BiteBook V2.1 — GitHub Pages prototype
 
-This is a **zero-build prototype**. You do not need npm, React, Vite or a server to test it.
+BiteBook turns eating out into a city-wide collecting game. This V2.1 prototype separates permanent **XP** from spendable **Bites** and adds a working local rewards loop.
 
-## Put it online with GitHub Pages
+## What V2.1 adds
 
-1. Create a new GitHub repository, e.g. `bitebook`.
-2. Upload `index.html`, `styles.css`, `app.js`, `supabase-schema.sql` and this README to the repository root.
-3. In GitHub go to **Settings → Pages**.
-4. Under **Build and deployment**, choose **Deploy from a branch**.
-5. Choose your main branch and `/ (root)`, then Save.
-6. GitHub will give you the public Pages address once deployed.
+- Permanent XP for levels and leaderboards
+- Spendable Bites wallet
+- Check-ins, ratings, written reviews and food-photo actions with different rewards
+- Quality-review threshold: useful reviews earn more, regardless of star rating
+- Restaurant reward marketplace with simulated redemption codes
+- Bite spending that does not reduce XP
+- Auto-calculated challenge and badge progress
+- Updated restaurant partner proposition focused on anonymous, rating-independent rewards
+- Automatic migration of old BiteBook V1 browser data where possible
 
-## Included in v0.1
+## Run locally
 
-- Bristol restaurant discovery
-- Restaurant/area/cuisine search
-- Cuisine filters
-- Wishlist saving
-- Five-star ratings
-- Personal BiteBook of visited restaurants
-- BiteBook points
-- Friend-group leaderboard
-- Monthly-style challenge and badges
-- Restaurant deals section
-- Restaurant partner/dashboard concept
-- Mobile layout
-- Browser persistence via `localStorage`
-- Starter Supabase SQL schema for the next version
+Double-click `index.html`.
 
-## Data
+## Put it on GitHub Pages
 
-The restaurants are prototype seed data. **Deals are labelled as demo deals and are not claims about current real-world offers.** Before launch, restaurant records should be confirmed and restaurant owners should be able to claim/manage their own profiles.
+Upload/replace these files in the root of your existing repository:
 
-## Next build: v0.2
+- `index.html`
+- `styles.css`
+- `app.js`
+- `supabase-schema.sql`
+- `README.md`
 
-The sensible next step is connecting Supabase so BiteBook has real user accounts and shared data. I would add, in this order:
+Commit the changes. If GitHub Pages is already configured to deploy from `main` / `(root)`, the live site should update automatically after the Pages build completes.
 
-1. Email/social sign-up and user profiles
-2. Real restaurant table populated from an admin account
-3. Visit/rating/wishlist syncing
-4. Create/join groups using invite codes
-5. Real group leaderboards generated from activity
-6. Restaurant claiming and restaurant-admin accounts
-7. Deals created by restaurants
-8. Booking links/requests
+## Prototype limitations
 
-`supabase-schema.sql` contains the initial database tables for that work.
+V2.1 still stores state in `localStorage`, so users are not genuinely shared across devices yet. Photo upload is represented by a toggle and reward redemption codes are generated locally. The next backend phase should connect Supabase Auth and persist profiles, visits/reviews, groups, wallets, transactions, rewards and redemptions on the server.
+
+
+## V2.1 map update
+
+Discover now includes an interactive Bristol map powered by Leaflet + OpenStreetMap. Pins distinguish visited, wishlist and unvisited restaurants, reward partners carry a reward badge, and the map responds to search, cuisine and map-status filters.
